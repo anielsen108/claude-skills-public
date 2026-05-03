@@ -1,0 +1,1651 @@
+<!DOCTYPE html>
+<!--
+================================================================================
+VOTER QUIZ TEMPLATE
+================================================================================
+
+This template is the skeleton of a voter quiz artifact. To customize for a
+specific election and location, edit the sections marked CUSTOMIZE below.
+
+CUSTOMIZATION POINTS (search for "CUSTOMIZE:"):
+  1. AREA constant         — your location and district info
+  2. QUESTIONS array       — your 10–25 policy-specific questions
+  3. CANDIDATES object     — candidate slates with scores and viability
+  4. UNCONTESTED constant  — uncontested seats
+  5. MEASURES array        — ballot measures with direct-question mappings
+  6. RACE_GROUPS array     — which races to display, in what order, in what section
+  7. Welcome screen text   — masthead, headline, lede
+  8. Verify URL            — link to official voter information guide
+
+Everything else (CSS, scoring algorithm, reason extraction, viable filter,
+download generation, party labels) is automatic — don't change those parts
+unless you know what you're doing.
+
+See the SKILL.md and references/ files for full design guidance.
+================================================================================
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sonoma County Voter Quiz — June 2, 2026 Primary</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300..900&family=DM+Sans:opsz,wght@9..40,300..700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #F2EBDD;
+    --paper-dark: #E8DEC9;
+    --ink: #1A1F2C;
+    --ink-soft: #4A5163;
+    --accent: #B0432F;
+    --accent-soft: #D88566;
+    --rule: #C9BFA7;
+    --yes: #2F6B47;
+    --no: #B0432F;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 17px;
+    line-height: 1.55;
+    min-height: 100vh;
+    background-image:
+      radial-gradient(ellipse at top, rgba(176,67,47,0.04), transparent 60%),
+      radial-gradient(ellipse at bottom right, rgba(26,31,44,0.05), transparent 50%);
+    background-attachment: fixed;
+  }
+
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.04 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+    z-index: 1;
+  }
+
+  #app {
+    position: relative;
+    z-index: 2;
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 32px 24px 80px;
+    min-height: 100vh;
+  }
+
+  .display { font-family: 'Fraunces', serif; font-weight: 400; }
+
+  /* HEADER */
+  .masthead {
+    text-align: center;
+    border-bottom: 1px solid var(--ink);
+    padding-bottom: 12px;
+    margin-bottom: 20px;
+  }
+  .masthead .kicker {
+    font-family: 'Fraunces', serif;
+    font-size: 11px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 500;
+  }
+  .masthead .date {
+    font-family: 'Fraunces', serif;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    margin-top: 2px;
+  }
+
+  /* WELCOME */
+  .welcome {
+    text-align: center;
+    padding: 24px 8px 40px;
+  }
+  .welcome h1 {
+    font-family: 'Fraunces', serif;
+    font-weight: 300;
+    font-size: clamp(38px, 8vw, 64px);
+    line-height: 0.98;
+    letter-spacing: -0.02em;
+    margin: 24px 0 16px;
+  }
+  .welcome h1 em {
+    font-style: italic;
+    color: var(--accent);
+    font-weight: 400;
+  }
+  .welcome .lede {
+    font-family: 'Fraunces', serif;
+    font-size: 19px;
+    font-style: italic;
+    color: var(--ink-soft);
+    max-width: 480px;
+    margin: 0 auto 28px;
+    line-height: 1.45;
+  }
+  .welcome .meta {
+    font-size: 13px;
+    color: var(--ink-soft);
+    margin-bottom: 32px;
+    letter-spacing: 0.04em;
+  }
+  .welcome .meta strong { color: var(--ink); }
+
+  .ornament {
+    font-family: 'Fraunces', serif;
+    text-align: center;
+    color: var(--accent);
+    font-size: 22px;
+    letter-spacing: 0.4em;
+    margin: 28px 0;
+  }
+
+  /* BUTTONS */
+  .btn {
+    display: inline-block;
+    padding: 14px 30px;
+    background: var(--ink);
+    color: var(--paper);
+    border: none;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s;
+    border-radius: 0;
+  }
+  .btn:hover { background: var(--accent); transform: translateY(-1px); }
+  .btn-large { padding: 18px 40px; font-size: 16px; }
+  .btn-ghost {
+    background: transparent;
+    color: var(--ink-soft);
+    border: 1px solid var(--rule);
+    padding: 10px 22px;
+    font-size: 13px;
+  }
+  .btn-ghost:hover { background: var(--paper-dark); color: var(--ink); transform: none; }
+
+  /* CITY SELECTOR */
+  .city-screen { padding: 30px 0; }
+  .city-screen h2 {
+    font-family: 'Fraunces', serif;
+    font-weight: 400;
+    font-size: 32px;
+    line-height: 1.1;
+    margin-bottom: 10px;
+  }
+  .city-screen p {
+    color: var(--ink-soft);
+    margin-bottom: 24px;
+    font-size: 15px;
+  }
+  .city-options {
+    display: grid;
+    gap: 8px;
+  }
+  .city-btn {
+    text-align: left;
+    padding: 16px 20px;
+    background: var(--paper-dark);
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 16px;
+    color: var(--ink);
+  }
+  .city-btn:hover {
+    border-color: var(--accent);
+    background: var(--paper);
+  }
+  .city-btn .city-meta {
+    display: block;
+    font-size: 12px;
+    color: var(--ink-soft);
+    margin-top: 3px;
+    letter-spacing: 0.02em;
+  }
+
+  /* QUIZ */
+  .quiz-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 28px;
+    font-size: 12px;
+    color: var(--ink-soft);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+  .progress-bar {
+    flex: 1;
+    height: 2px;
+    background: var(--rule);
+    margin: 0 16px;
+    position: relative;
+  }
+  .progress-fill {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    background: var(--accent);
+    transition: width 0.4s ease;
+  }
+  .quiz-card {
+    padding: 30px 0;
+    animation: fadeUp 0.4s ease;
+  }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .quiz-category {
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    color: var(--accent);
+    font-size: 13px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  .quiz-question {
+    font-family: 'Fraunces', serif;
+    font-weight: 400;
+    font-size: clamp(28px, 5vw, 38px);
+    line-height: 1.15;
+    margin-bottom: 36px;
+    letter-spacing: -0.01em;
+  }
+  .answer-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .answer-grid.single { grid-template-columns: 1fr; }
+  .answer-btn {
+    padding: 22px 18px;
+    background: var(--paper-dark);
+    border: 1px solid transparent;
+    cursor: pointer;
+    font-family: 'Fraunces', serif;
+    font-weight: 400;
+    font-size: 22px;
+    color: var(--ink);
+    transition: all 0.18s;
+    text-align: center;
+  }
+  .answer-btn:hover {
+    background: var(--paper);
+    border-color: var(--accent);
+    transform: translateY(-2px);
+  }
+  .answer-btn.yes:hover { color: var(--yes); }
+  .answer-btn.no:hover { color: var(--no); }
+
+  .answer-btn.choice {
+    text-align: left;
+    padding: 18px 20px;
+    font-size: 17px;
+    font-family: 'DM Sans', sans-serif;
+  }
+
+  .quiz-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--rule);
+  }
+  .skip-link {
+    background: none;
+    border: none;
+    color: var(--ink-soft);
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    text-decoration: underline;
+    text-underline-offset: 4px;
+  }
+  .skip-link:hover { color: var(--accent); }
+
+  /* RESULTS */
+  .results-screen { padding: 0; }
+  .results-screen h1 {
+    font-family: 'Fraunces', serif;
+    font-weight: 300;
+    font-size: clamp(36px, 7vw, 56px);
+    line-height: 1.0;
+    letter-spacing: -0.02em;
+    margin-bottom: 12px;
+  }
+  .results-screen h1 em {
+    font-style: italic;
+    color: var(--accent);
+    font-weight: 400;
+  }
+  .results-summary {
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-size: 18px;
+    color: var(--ink-soft);
+    line-height: 1.5;
+    margin-bottom: 28px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .profile-card {
+    background: var(--paper-dark);
+    padding: 22px 24px;
+    margin-bottom: 32px;
+    border-left: 3px solid var(--accent);
+  }
+  .profile-card h3 {
+    font-family: 'Fraunces', serif;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--accent);
+    margin-bottom: 8px;
+    font-weight: 500;
+  }
+  .profile-text {
+    font-family: 'Fraunces', serif;
+    font-size: 19px;
+    line-height: 1.45;
+  }
+
+  .section-header {
+    margin-top: 48px;
+    margin-bottom: 20px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--ink);
+  }
+  .section-header .section-kicker {
+    font-family: 'Fraunces', serif;
+    font-size: 11px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 500;
+  }
+  .section-header h2 {
+    font-family: 'Fraunces', serif;
+    font-weight: 400;
+    font-size: 32px;
+    line-height: 1.1;
+    margin-top: 4px;
+    letter-spacing: -0.01em;
+  }
+
+  .race {
+    margin-bottom: 28px;
+    padding-bottom: 24px;
+    border-bottom: 1px dotted var(--rule);
+  }
+  .race:last-child { border-bottom: none; }
+  .race-title {
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-size: 18px;
+    margin-bottom: 4px;
+  }
+  .race-meta {
+    font-size: 12px;
+    color: var(--ink-soft);
+    letter-spacing: 0.04em;
+    margin-bottom: 12px;
+    font-style: italic;
+  }
+  .pick {
+    background: var(--paper-dark);
+    padding: 14px 18px;
+    margin-top: 8px;
+    border-left: 3px solid var(--accent);
+  }
+  .pick-label {
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .pick-name {
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-size: 19px;
+    color: var(--ink);
+  }
+  .pick-name .party {
+    font-size: 13px;
+    color: var(--ink-soft);
+    font-weight: 400;
+    font-style: italic;
+    margin-left: 6px;
+  }
+  .pick-rationale {
+    font-size: 14px;
+    color: var(--ink-soft);
+    line-height: 1.5;
+    margin-top: 6px;
+  }
+  .alternates {
+    font-size: 13px;
+    color: var(--ink-soft);
+    margin-top: 10px;
+    line-height: 1.5;
+  }
+  .alternates strong { color: var(--ink); font-weight: 500; }
+
+  .measure-card {
+    background: var(--paper-dark);
+    padding: 22px 24px;
+    margin-bottom: 20px;
+    border-left: 3px solid var(--accent);
+  }
+  .measure-card .measure-title {
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-size: 22px;
+    margin-bottom: 8px;
+  }
+  .measure-vote {
+    display: inline-block;
+    font-family: 'Fraunces', serif;
+    font-size: 32px;
+    font-weight: 600;
+    padding: 4px 18px;
+    margin: 8px 0;
+    letter-spacing: 0.05em;
+  }
+  .measure-vote.yes { color: var(--yes); }
+  .measure-vote.no { color: var(--no); }
+  .measure-summary {
+    font-size: 14px;
+    color: var(--ink-soft);
+    line-height: 1.5;
+    margin-bottom: 8px;
+  }
+  .measure-rationale {
+    font-size: 14px;
+    line-height: 1.5;
+    margin-top: 6px;
+  }
+
+  .footer-actions {
+    margin-top: 48px;
+    padding-top: 24px;
+    border-top: 1px solid var(--rule);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: center;
+  }
+
+  .disclaimer {
+    margin-top: 32px;
+    padding: 18px 22px;
+    background: var(--paper-dark);
+    font-size: 13px;
+    color: var(--ink-soft);
+    line-height: 1.55;
+    border: 1px solid var(--rule);
+  }
+  .disclaimer strong { color: var(--ink); }
+
+  /* REASONS */
+  .reasons {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px dashed var(--rule);
+  }
+  .reasons-label {
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
+  .reason {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 8px;
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  .reason-badge {
+    flex-shrink: 0;
+    display: inline-block;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    padding: 3px 8px;
+    text-transform: uppercase;
+    margin-top: 1px;
+    min-width: 48px;
+    text-align: center;
+  }
+  .reason-badge.yes    { background: var(--yes);    color: var(--paper); }
+  .reason-badge.no     { background: var(--no);     color: var(--paper); }
+  .reason-badge.choice { background: var(--ink);    color: var(--paper); }
+  .reason-text { color: var(--ink); }
+  .reason-sub {
+    display: block;
+    font-size: 12px;
+    color: var(--ink-soft);
+    font-style: italic;
+    margin-top: 2px;
+  }
+  .reasons-empty {
+    font-size: 13px;
+    color: var(--ink-soft);
+    font-style: italic;
+  }
+
+  /* Mobile */
+  @media (max-width: 540px) {
+    #app { padding: 20px 18px 60px; }
+    .answer-grid { grid-template-columns: 1fr; }
+    .answer-btn { padding: 18px 14px; font-size: 19px; }
+    .quiz-question { font-size: 26px; }
+    .race-title { font-size: 17px; }
+    .pick-name { font-size: 17px; }
+  }
+</style>
+</head>
+<body>
+<main id="app"></main>
+
+<script>
+//==============================================================
+// SONOMA COUNTY JUNE 2, 2026 PRIMARY — VOTER QUIZ
+//==============================================================
+
+// ==============================================================
+// CUSTOMIZE: AREA constant
+// Replace with the city/town and district info for the user's location.
+// - id: a slug identifier (used internally only)
+// - label: display name shown in masthead and headers
+// - meta: brief district summary shown in the welcome footnote
+// - cd / sd / ad / sup: district numbers (used to look up slate keys
+//   like cd2, ss2, ad12, sup2 in the CANDIDATES object)
+// ==============================================================
+const AREA = {
+  id: 'petaluma',
+  label: 'Petaluma',
+  meta: 'CD-2 · SD-2 · AD-12 · Sup-D2',
+  cd: 2,
+  ad: 12,
+  sup: 2
+};
+
+// ==============================================================
+// CUSTOMIZE: Election labels and links
+// - ELECTION_LABEL: shown in results masthead (e.g. "June 2, 2026 · Sonoma County")
+// - ELECTION_DATE_LONG: longer form for the welcome screen
+// - VERIFY_URL: link to the official voter information guide
+// - DISCLAIMER_HTML: HTML for the on-screen disclaimer at the end of results
+// ==============================================================
+const ELECTION_LABEL = 'June 2, 2026 · Sonoma County';
+const ELECTION_DATE_LONG = 'Statewide Direct Primary · Tuesday June 2, 2026';
+const VERIFY_URL = 'https://sonomacounty.gov/administrative-support-and-fiscal-services/registrar-of-voters/elections/june-2-2026-statewide-direct-primary-election';
+const DISCLAIMER_HTML = `
+  <strong>About these recommendations.</strong> Matches are computed by mapping your quiz answers to the publicly known positions of each candidate.
+  <strong>Recommendations are limited to candidates considered viable in California's top-two primary</strong>
+  (major-party candidates with institutional backing and a realistic shot at advancing to November) — third-party and minor candidates are excluded by default.
+  For very local races, public position data is limited — please read the candidate statements in your
+  <a href="${VERIFY_URL}" target="_blank" style="color: var(--accent);">official Voter Information Guide</a>
+  before voting. This quiz is not affiliated with any campaign or political party.
+`;
+
+// ============== QUESTIONS ===================================
+// Each question has impact deltas on scoring axes.
+// Axes: progressive, yimby, environment, transit, safetyHawk, taxServices
+// (yes answers contribute the listed deltas; no answers contribute -delta)
+// Multiple-choice questions specify per-option impacts.
+
+// ==============================================================
+// CUSTOMIZE: QUESTIONS array
+// 10–25 policy-specific yes/no questions. NO general orientation
+// questions (no "how would you describe yourself politically?").
+// Each question is a specific government action.
+//
+// Format:
+//   { c: 'Category Name',
+//     q: 'Question text ending in period.',
+//     d: { axis1: ±N, axis2: ±N }   // deltas applied when 'yes'
+//   }
+//
+// See references/question-design.md for full guidance.
+// ==============================================================
+const QUESTIONS = [
+  // HOUSING (2) — broad yimby + intensity (matters for AD-12)
+  { c: 'Housing & Cost of Living', q: 'More housing should be built in Petaluma.',                            d: { yimby: 8, progressive: 2 } },
+  { c: 'Housing & Cost of Living', q: 'Single-family neighborhoods should allow duplexes and ADUs by right.', d: { yimby: 10, progressive: 4 } },
+
+  // ENVIRONMENT (2) — Sonoma-salient + ag tie-in (matters for AD-12, BoE, Measure B)
+  { c: 'Environment & Climate',    q: 'Wildfire prevention spending should be increased.',                    d: { environment: 6, taxServices: 4 } },
+  { c: 'Environment & Climate',    q: 'Pesticide use in agriculture should be more strictly regulated.',      d: { environment: 8, progressive: 4 } },
+
+  // TRANSPORTATION (2) — opposing pair, drives Measure B
+  { c: 'Transportation',           q: 'The SMART train should be expanded and continued.',                    d: { transit: 10, environment: 4 } },
+  { c: 'Transportation',           q: 'Highways should be widened to reduce traffic.',                        d: { transit: -6, environment: -4 } },
+
+  // PUBLIC SAFETY (2) — sheriff base + reform contrast
+  { c: 'Public Safety',            q: 'The Sonoma County Sheriff should get more funding.',                   d: { safetyHawk: 8, progressive: -4 } },
+  { c: 'Public Safety',            q: 'Mental health teams (not police) should respond to most crisis calls.',d: { safetyHawk: -6, progressive: 6 } },
+
+  // ECONOMY & TAXES (1) — specific tax policy
+  { c: 'Economy & Taxes',          q: 'Top earners should pay higher state taxes.',                           d: { progressive: 8, taxServices: 8 } },
+
+  // HEALTHCARE (1)
+  { c: 'Healthcare',               q: 'California should move toward single-payer healthcare.',               d: { progressive: 10, taxServices: 6 } },
+
+  // EDUCATION (2) — sharp contrast pair, drives SPI race
+  { c: 'Education',                q: 'K–12 schools should get more state funding.',                          d: { progressive: 6, taxServices: 6 } },
+  { c: 'Education',                q: 'More charter schools should be allowed.',                              d: { progressive: -6 } },
+
+  // GOVERNMENT & REFORM (1) — clean conservative-direction signal
+  { c: 'Government & Reform',      q: 'Voter ID should be required.',                                         d: { progressive: -6 } },
+
+  // SOCIAL (1) — Sonoma sanctuary salience
+  { c: 'Social Issues',            q: 'Local police should NOT cooperate with federal immigration enforcement.', d: { progressive: 8 } },
+
+  // AGRICULTURE & LOCAL (2) — Sonoma-specific
+  { c: 'Agriculture & Local',      q: 'Cannabis cultivation rules should be loosened to allow more growers.', d: { progressive: 4 } },
+  { c: 'Agriculture & Local',      q: 'Dairy farms should face stricter environmental rules.',                d: { environment: 8, progressive: 4 } },
+];
+
+// ============== CANDIDATES ==================================
+// Each candidate has scores on the same axes.
+// progressive: -100 (very conservative) to +100 (very progressive)
+// taxServices: how much they support taxing-and-spending
+// transit: how supportive of transit/SMART
+// environment: how strongly pro-environment
+// yimby: how supportive of pro-housing density policies
+// safetyHawk: how police-and-prosecution oriented
+
+// ==============================================================
+// CUSTOMIZE: CANDIDATES object
+// All candidate slates, organized by race key.
+// Race keys are referenced from RACE_GROUPS below — keep them consistent.
+//
+// Each candidate object:
+//   {
+//     name: 'Candidate Name',
+//     party: 'D' | 'R' | 'NPP' | 'G' | 'P&F' | 'L' | 'AI' | '',
+//     desc: 'Ballot designation (incumbent, profession, etc.)',
+//     viable: true | false,   // optional, defaults to true
+//     s: { progressive: -100..+100, taxServices: -100..+100, ... }
+//   }
+//
+// Set viable: false for third-party candidates in major races,
+// dropped-out candidates, and very low-profile filings.
+//
+// See references/candidate-scoring.md for full scoring rubric.
+// ==============================================================
+const CANDIDATES = {
+  // -------- FEDERAL ---------
+  cd1: [
+    { name: 'Mike McGuire',       party: 'D', desc: 'CA State Senator', s: { progressive: 50, taxServices: 50, transit: 60, environment: 60, yimby: 40, safetyHawk: 0 } },
+    { name: 'Audrey Denney',      party: 'D', desc: 'Educator/Nonprofit Consultant', s: { progressive: 55, taxServices: 50, transit: 50, environment: 60, yimby: 30, safetyHawk: -10 } },
+    { name: 'Janice Karrman',     party: 'D', desc: 'Retired Wine Broker', viable: false, s: { progressive: 35, taxServices: 30, transit: 30, environment: 40, yimby: 20, safetyHawk: 0 } },
+    { name: 'Timothy Sean Kelly', party: 'NPP', desc: 'Housing Attorney/Educator', s: { progressive: 30, taxServices: 30, transit: 30, environment: 40, yimby: 50, safetyHawk: -10 } },
+    { name: 'James Gallagher',    party: 'R', desc: 'Farmer/State Assemblyman', s: { progressive: -55, taxServices: -50, transit: -30, environment: -40, yimby: -10, safetyHawk: 50 } },
+    { name: 'Richard T. Minner',  party: 'NPP', desc: 'Software Architect', viable: false, s: { progressive: 0, taxServices: 0, transit: 0, environment: 10, yimby: 10, safetyHawk: 0 } },
+  ],
+  cd2: [
+    { name: 'Jared Huffman',         party: 'D', desc: 'U.S. Representative (incumbent)', s: { progressive: 65, taxServices: 60, transit: 70, environment: 80, yimby: 30, safetyHawk: -20 } },
+    { name: 'Rose Penelope Yee',     party: 'D', desc: 'Finance Businesswoman', s: { progressive: 30, taxServices: 30, transit: 40, environment: 40, yimby: 30, safetyHawk: 0 } },
+    { name: 'Nicolette Hahn Niman',  party: 'NPP', desc: 'Author/Rancher', s: { progressive: 20, taxServices: 10, transit: 20, environment: 70, yimby: -10, safetyHawk: 0 } },
+    { name: 'Gregory Burgess',       party: 'NPP', desc: 'Elder Caregiver', viable: false, s: { progressive: 10, taxServices: 10, transit: 20, environment: 30, yimby: 0, safetyHawk: 0 } },
+    { name: 'Robin Littau',          party: 'R', desc: 'School Board Member', s: { progressive: -55, taxServices: -50, transit: -30, environment: -40, yimby: -10, safetyHawk: 40 } },
+    { name: 'Paul Saulsbury',        party: 'R', desc: 'Mobile Crisis Clinician', s: { progressive: -30, taxServices: -20, transit: -10, environment: -10, yimby: 0, safetyHawk: 30 } },
+    { name: 'Tim Geist',             party: 'R', desc: 'Retired Researcher', viable: false, s: { progressive: -50, taxServices: -50, transit: -30, environment: -30, yimby: -10, safetyHawk: 40 } },
+    { name: 'Angelita Valles',       party: 'R', desc: 'Business Owner', viable: false, s: { progressive: -50, taxServices: -50, transit: -30, environment: -30, yimby: -10, safetyHawk: 40 } },
+  ],
+  cd4: [
+    { name: 'Mike Thompson',  party: 'D', desc: 'Member of Congress (incumbent)', s: { progressive: 45, taxServices: 50, transit: 50, environment: 60, yimby: 20, safetyHawk: 0 } },
+    { name: 'Eric Jones',     party: 'D', desc: 'Businessman/Nonprofit Executive', s: { progressive: 35, taxServices: 30, transit: 40, environment: 50, yimby: 30, safetyHawk: 0 } },
+    { name: 'John MacKenzie', party: 'R', desc: 'Registered Nurse', s: { progressive: -45, taxServices: -40, transit: -20, environment: -20, yimby: 0, safetyHawk: 30 } },
+    { name: 'Ray Riehle',     party: 'R', desc: 'Business Owner/Entrepreneur', s: { progressive: -50, taxServices: -50, transit: -30, environment: -30, yimby: 0, safetyHawk: 40 } },
+    { name: 'Sharon Brown',   party: 'R', desc: 'Registered Nurse', viable: false, s: { progressive: -45, taxServices: -45, transit: -20, environment: -20, yimby: 0, safetyHawk: 30 } },
+    { name: 'Jimih Jones',    party: 'R', desc: 'Parts Manager', viable: false, s: { progressive: -50, taxServices: -50, transit: -30, environment: -30, yimby: -10, safetyHawk: 40 } },
+    { name: 'Mandy Ghusar',   party: 'R', desc: 'LVN Nurse', viable: false, s: { progressive: -45, taxServices: -45, transit: -20, environment: -20, yimby: 0, safetyHawk: 30 } },
+    { name: 'Chuck Uribe',    party: 'R', desc: 'Public School Teacher', viable: false, s: { progressive: -40, taxServices: -30, transit: -10, environment: -10, yimby: 0, safetyHawk: 30 } },
+    { name: 'Thomas M. Roach',party: 'NPP', desc: '', viable: false, s: { progressive: 0, taxServices: 0, transit: 0, environment: 0, yimby: 0, safetyHawk: 0 } },
+  ],
+
+  // -------- GOVERNOR (top contenders only — narrow field) --------
+  governor: [
+    { name: 'Katie Porter',         party: 'D', desc: 'Consumer Protection Advocate',                          s: { progressive: 65, taxServices: 60, transit: 50, environment: 70, yimby: 40, safetyHawk: -10 } },
+    { name: 'Tony K. Thurmond',     party: 'D', desc: 'CA Superintendent of Public Instruction',               s: { progressive: 55, taxServices: 60, transit: 40, environment: 60, yimby: 30, safetyHawk: -10 } },
+    { name: 'Tom Steyer',           party: 'D', desc: 'Climate Advocate',                                      s: { progressive: 50, taxServices: 50, transit: 50, environment: 80, yimby: 40, safetyHawk: 0 } },
+    { name: 'Antonio Villaraigosa', party: 'D', desc: 'Housing Affordability Advocate',                        s: { progressive: 25, taxServices: 30, transit: 50, environment: 40, yimby: 60, safetyHawk: 10 } },
+    { name: 'Xavier Becerra',       party: 'D', desc: 'Voting Rights Attorney',                                s: { progressive: 30, taxServices: 35, transit: 30, environment: 50, yimby: 30, safetyHawk: 0 } },
+    { name: 'Betty T. Yee',         party: 'D', desc: 'Family Care Navigator',                                 s: { progressive: 35, taxServices: 40, transit: 40, environment: 50, yimby: 25, safetyHawk: 0 } },
+    { name: 'Matt Mahan',           party: 'D', desc: 'Mayor, San Jose',                                       s: { progressive: 15, taxServices: 20, transit: 30, environment: 30, yimby: 50, safetyHawk: 30 } },
+    { name: 'Chad Bianco',          party: 'R', desc: 'Riverside County Sheriff',                              s: { progressive: -65, taxServices: -50, transit: -30, environment: -40, yimby: -10, safetyHawk: 80 } },
+    { name: 'Steve Hilton',         party: 'R', desc: 'Small Business Owner / Commentator',                    s: { progressive: -55, taxServices: -50, transit: -30, environment: -30, yimby: 10, safetyHawk: 50 } },
+    // Non-viable third-party / fringe candidates (filtered out by default)
+    { name: 'Ramsey Robinson',      party: 'P&F', desc: 'School Social Worker', viable: false,                 s: { progressive: 80, taxServices: 70, transit: 50, environment: 70, yimby: 30, safetyHawk: -40 } },
+    { name: 'Tom Woodard',          party: 'L', desc: 'Retired CEO', viable: false,                            s: { progressive: -20, taxServices: -60, transit: 0, environment: 0, yimby: 30, safetyHawk: 0 } },
+  ],
+
+  // -------- LT GOVERNOR --------
+  ltgov: [
+    { name: 'Michael Tubbs',     party: 'D', desc: 'Anti-Poverty Non-Profit Director', s: { progressive: 65, taxServices: 60, transit: 50, environment: 60, yimby: 40, safetyHawk: -20 } },
+    { name: 'Janelle Kellman',   party: 'D', desc: 'Climate Risk Executive', s: { progressive: 50, taxServices: 50, transit: 60, environment: 80, yimby: 30, safetyHawk: 0 } },
+    { name: 'Fiona Ma',          party: 'D', desc: 'State Treasurer/CPA', s: { progressive: 30, taxServices: 30, transit: 40, environment: 40, yimby: 30, safetyHawk: 0 } },
+    { name: 'Tim Myers',         party: 'D', desc: 'Businessman/Musician', s: { progressive: 35, taxServices: 35, transit: 40, environment: 50, yimby: 30, safetyHawk: 0 } },
+    { name: 'Josh Fryday',       party: 'D', desc: 'Governor\'s Cabinet Member', s: { progressive: 40, taxServices: 40, transit: 40, environment: 50, yimby: 30, safetyHawk: 0 } },
+    { name: 'Oliver Ma',         party: 'D', desc: 'Civil Rights Lawyer', viable: false, s: { progressive: 55, taxServices: 50, transit: 40, environment: 50, yimby: 30, safetyHawk: -10 } },
+    { name: 'Jeyson Lopez',      party: 'D', desc: 'Customer Experience Consultant', viable: false, s: { progressive: 30, taxServices: 30, transit: 30, environment: 40, yimby: 20, safetyHawk: 0 } },
+    { name: 'Abdur Rahman Sikder', party: 'D', desc: 'Professor', viable: false, s: { progressive: 30, taxServices: 30, transit: 30, environment: 40, yimby: 20, safetyHawk: 0 } },
+    { name: 'Alice Stek',        party: 'P&F', desc: 'Physician/OBGYN', viable: false, s: { progressive: 75, taxServices: 60, transit: 40, environment: 60, yimby: 20, safetyHawk: -30 } },
+    { name: 'Ebie Lynch',        party: 'R', desc: 'Business Owner/Nurse', s: { progressive: -50, taxServices: -45, transit: -20, environment: -20, yimby: 0, safetyHawk: 40 } },
+    { name: 'Gloria Romero',     party: 'R', desc: 'Educator/Businesswoman', s: { progressive: -40, taxServices: -30, transit: -10, environment: -10, yimby: 10, safetyHawk: 30 } },
+    { name: 'David Collenberg',  party: 'R', desc: 'Farmer/Business Owner', viable: false, s: { progressive: -50, taxServices: -45, transit: -30, environment: -30, yimby: 0, safetyHawk: 40 } },
+    { name: 'David Fennell',     party: 'R', desc: 'Businessman', viable: false, s: { progressive: -50, taxServices: -50, transit: -30, environment: -30, yimby: 0, safetyHawk: 40 } },
+    { name: 'Skip Shelton',      party: 'R', desc: 'Defense Technology Executive', viable: false, s: { progressive: -50, taxServices: -40, transit: -20, environment: -20, yimby: 10, safetyHawk: 50 } },
+    { name: 'Rakesh Christian',  party: 'NPP', desc: 'Business Owner', viable: false, s: { progressive: 0, taxServices: 0, transit: 0, environment: 10, yimby: 10, safetyHawk: 0 } },
+    { name: 'Sean Collinson',    party: 'NPP', desc: 'Mediator', viable: false, s: { progressive: 5, taxServices: 0, transit: 10, environment: 20, yimby: 10, safetyHawk: 0 } },
+  ],
+
+  // -------- SECRETARY OF STATE --------
+  sos: [
+    { name: 'Shirley N. Weber',  party: 'D', desc: 'CA Secretary of State (incumbent)', s: { progressive: 50, taxServices: 50, transit: 30, environment: 50, yimby: 20, safetyHawk: 0 } },
+    { name: 'Donald P. Wagner',  party: 'R', desc: 'Orange County Supervisor', s: { progressive: -50, taxServices: -45, transit: -20, environment: -20, yimby: 0, safetyHawk: 40 } },
+    { name: 'Michael Feinstein', party: 'G', desc: 'Electoral Reform Consultant', viable: false, s: { progressive: 70, taxServices: 50, transit: 60, environment: 80, yimby: 30, safetyHawk: -20 } },
+    { name: 'Gary N. Blenner',   party: 'G', desc: 'Teacher', viable: false, s: { progressive: 65, taxServices: 50, transit: 50, environment: 70, yimby: 20, safetyHawk: -20 } },
+  ],
+
+  // -------- CONTROLLER --------
+  controller: [
+    { name: 'Malia M. Cohen',  party: 'D', desc: 'State Controller (incumbent)', s: { progressive: 50, taxServices: 50, transit: 40, environment: 50, yimby: 30, safetyHawk: 0 } },
+    { name: 'Herb W. Morgan',  party: 'R', desc: 'Chief Investment Officer', s: { progressive: -50, taxServices: -50, transit: -20, environment: -20, yimby: 10, safetyHawk: 30 } },
+    { name: 'Meghann Adams',   party: 'P&F', desc: 'School Bus Driver', viable: false, s: { progressive: 75, taxServices: 60, transit: 60, environment: 60, yimby: 20, safetyHawk: -30 } },
+  ],
+
+  // -------- TREASURER --------
+  treasurer: [
+    { name: 'Eleni Kounalakis',  party: 'D', desc: 'Lieutenant Governor of California', s: { progressive: 35, taxServices: 35, transit: 40, environment: 50, yimby: 30, safetyHawk: 0 } },
+    { name: 'Anna M. Caballero', party: 'D', desc: 'CA State Senator', s: { progressive: 30, taxServices: 35, transit: 30, environment: 40, yimby: 25, safetyHawk: 0 } },
+    { name: 'Tony Vazquez',      party: 'D', desc: 'Member, State Board of Equalization', s: { progressive: 35, taxServices: 35, transit: 30, environment: 40, yimby: 25, safetyHawk: 0 } },
+    { name: 'Glenn Turner',      party: 'G', desc: '(Green)', viable: false, s: { progressive: 65, taxServices: 50, transit: 50, environment: 70, yimby: 20, safetyHawk: -20 } },
+    { name: 'Jennifer Hawks',    party: 'R', desc: 'Retired Businesswoman', s: { progressive: -50, taxServices: -50, transit: -20, environment: -20, yimby: 10, safetyHawk: 30 } },
+    { name: 'David Serpa',       party: 'R', desc: 'Businessman/Author', s: { progressive: -50, taxServices: -50, transit: -20, environment: -20, yimby: 0, safetyHawk: 40 } },
+  ],
+
+  // -------- ATTORNEY GENERAL --------
+  ag: [
+    { name: 'Rob Bonta',        party: 'D', desc: 'Attorney General (incumbent)', s: { progressive: 55, taxServices: 50, transit: 40, environment: 60, yimby: 30, safetyHawk: 0 } },
+    { name: 'Marjorie Mikels',  party: 'G', desc: 'Attorney/Justice Advocate', viable: false, s: { progressive: 70, taxServices: 50, transit: 40, environment: 70, yimby: 20, safetyHawk: -30 } },
+    { name: 'Michael E. Gates', party: 'R', desc: 'Deputy U.S. Attorney', s: { progressive: -50, taxServices: -40, transit: -20, environment: -20, yimby: 0, safetyHawk: 60 } },
+  ],
+
+  // -------- INSURANCE COMMISSIONER --------
+  insurance: [
+    { name: 'Steven Bradford',  party: 'D', desc: 'Education Boardmember (former state senator)', s: { progressive: 50, taxServices: 50, transit: 40, environment: 50, yimby: 30, safetyHawk: 0 } },
+    { name: 'Ben Allen',        party: 'D', desc: 'CA State Senator', s: { progressive: 50, taxServices: 50, transit: 50, environment: 70, yimby: 35, safetyHawk: 0 } },
+    { name: 'Jane Kim',         party: 'D', desc: 'Attorney/Consumer Advocate', s: { progressive: 60, taxServices: 50, transit: 60, environment: 50, yimby: 35, safetyHawk: -10 } },
+    { name: 'Patrick Wolff',    party: 'D', desc: 'Financial Analyst', viable: false, s: { progressive: 35, taxServices: 35, transit: 30, environment: 40, yimby: 25, safetyHawk: 0 } },
+    { name: 'Eduardo "Lalo" Vargas', party: 'P&F', desc: 'Science Teacher', viable: false, s: { progressive: 75, taxServices: 60, transit: 50, environment: 60, yimby: 20, safetyHawk: -30 } },
+    { name: 'Sean Lee',         party: 'R', desc: 'Financial Services Executive', s: { progressive: -45, taxServices: -45, transit: -20, environment: -20, yimby: 10, safetyHawk: 30 } },
+    { name: 'Robert P. Howell', party: 'R', desc: 'Cybersecurity CEO', s: { progressive: -45, taxServices: -45, transit: -20, environment: -20, yimby: 10, safetyHawk: 30 } },
+    { name: 'Merritt Farren',   party: 'R', desc: 'Consumer Advocate/Attorney', viable: false, s: { progressive: -35, taxServices: -30, transit: -10, environment: -10, yimby: 10, safetyHawk: 20 } },
+    { name: 'Stacy A. Korsgaden', party: 'R', desc: 'Licensed Insurance Agent', s: { progressive: -45, taxServices: -45, transit: -20, environment: -20, yimby: 10, safetyHawk: 30 } },
+    { name: 'Eric Thor Aarnio', party: 'R', desc: 'Contractor', viable: false, s: { progressive: -50, taxServices: -45, transit: -20, environment: -20, yimby: 0, safetyHawk: 30 } },
+    { name: 'Keith W. Davis',   party: 'AI', desc: 'Insurance Agent', viable: false, s: { progressive: -30, taxServices: -30, transit: -10, environment: -10, yimby: 10, safetyHawk: 20 } },
+  ],
+
+  // -------- BOARD OF EQUALIZATION 2nd District --------
+  boe2: [
+    { name: 'Sally J. Lieber',  party: 'D', desc: 'Member, State Board of Equalization (incumbent)', s: { progressive: 55, taxServices: 50, transit: 50, environment: 60, yimby: 25, safetyHawk: 0 } },
+    { name: 'John Pimentel',    party: 'D', desc: 'San Mateo CCD Trustee', s: { progressive: 35, taxServices: 35, transit: 40, environment: 40, yimby: 30, safetyHawk: 0 } },
+    { name: 'Bill Shireman',    party: 'R', desc: 'Taxpayer Advocate', s: { progressive: -25, taxServices: -45, transit: 10, environment: 30, yimby: 20, safetyHawk: 10 } },
+    { name: 'John W. Zaruka',   party: 'R', desc: 'Retired Hospitality Executive', viable: false, s: { progressive: -50, taxServices: -50, transit: -20, environment: -20, yimby: 0, safetyHawk: 30 } },
+    { name: 'Mark McComas',     party: 'R', desc: 'Small Business Advocate', viable: false, s: { progressive: -45, taxServices: -50, transit: -20, environment: -20, yimby: 10, safetyHawk: 30 } },
+    { name: 'J. Brett Marymee', party: 'R', desc: 'Small Business Owner', viable: false, s: { progressive: -45, taxServices: -50, transit: -20, environment: -20, yimby: 10, safetyHawk: 30 } },
+  ],
+
+  // -------- STATE SENATE 2 --------
+  ss2: [
+    { name: 'Damon Connolly', party: 'D', desc: 'CA State Assemblymember', s: { progressive: 50, taxServices: 50, transit: 60, environment: 70, yimby: 30, safetyHawk: 0 } },
+    { name: 'Tief Gibbs',     party: 'R', desc: 'Small Businesswoman', s: { progressive: -45, taxServices: -45, transit: -20, environment: -20, yimby: 10, safetyHawk: 30 } },
+    { name: 'Aaron Smith',    party: 'R', desc: 'School Trustee/Dad', s: { progressive: -45, taxServices: -45, transit: -20, environment: -20, yimby: 10, safetyHawk: 30 } },
+  ],
+
+  // -------- STATE ASSEMBLY 2 --------
+  ad2: [
+    { name: 'Chris Rogers',  party: 'D', desc: 'Assemblymember (incumbent)', s: { progressive: 50, taxServices: 50, transit: 60, environment: 70, yimby: 35, safetyHawk: 0 } },
+    { name: 'Michael Greer', party: 'R', desc: 'Retired Teacher', s: { progressive: -45, taxServices: -45, transit: -20, environment: -20, yimby: 10, safetyHawk: 30 } },
+  ],
+
+  // -------- STATE ASSEMBLY 4 (uncontested) --------
+  ad4: [
+    { name: 'Cecilia M. Aguiar-Curry', party: 'D', desc: 'State Assemblymember (only candidate)', s: { progressive: 35, taxServices: 40, transit: 40, environment: 60, yimby: 25, safetyHawk: 0 } },
+  ],
+
+  // -------- STATE ASSEMBLY 12 (open seat — Petaluma area) --------
+  ad12: [
+    { name: 'Eli Beckman',     party: 'D', desc: 'Larkspur Councilmember/Business Owner', s: { progressive: 35, taxServices: 35, transit: 50, environment: 50, yimby: 50, safetyHawk: 0 } },
+    { name: 'Holli Thier',     party: 'D', desc: 'Tiburon Councilmember/Environmental Attorney', s: { progressive: 45, taxServices: 45, transit: 60, environment: 80, yimby: 30, safetyHawk: 0 } },
+    { name: 'Jackie Elward',   party: 'D', desc: 'Rohnert Park Councilwoman/Educator', s: { progressive: 55, taxServices: 50, transit: 50, environment: 60, yimby: 30, safetyHawk: -10 } },
+    { name: 'Eric Lucan',      party: 'D', desc: 'Marin County Supervisor', s: { progressive: 30, taxServices: 35, transit: 50, environment: 60, yimby: 30, safetyHawk: 10 } },
+    { name: 'Steve Schwartz',  party: 'D', desc: 'Non-profit Executive/Farmer', s: { progressive: 35, taxServices: 35, transit: 40, environment: 70, yimby: 20, safetyHawk: 0 } },
+    { name: 'Eryn Cervantes',  party: 'R', desc: 'Correctional Counselor', s: { progressive: -45, taxServices: -45, transit: -20, environment: -20, yimby: 10, safetyHawk: 50 } },
+  ],
+
+  // -------- SUPT. PUBLIC INSTRUCTION (nonpartisan but ideologically varied) --------
+  suptpi: [
+    { name: 'Al Muratsuchi',          party: '', desc: 'Assemblymember/Classroom Educator', s: { progressive: 45, taxServices: 50, transit: 30, environment: 50, yimby: 30, safetyHawk: 0 } },
+    { name: 'Anthony Rendon',         party: '', desc: 'Democracy Advocate/Educator (former Assembly Speaker)', s: { progressive: 50, taxServices: 50, transit: 40, environment: 60, yimby: 30, safetyHawk: 0 } },
+    { name: 'Josh Newman',            party: '', desc: 'Educator/Strategic Advisor (former state senator)', s: { progressive: 35, taxServices: 40, transit: 40, environment: 50, yimby: 30, safetyHawk: 0 } },
+    { name: 'Frank Lara',             party: '', desc: 'Teacher/Union VP', s: { progressive: 65, taxServices: 60, transit: 40, environment: 60, yimby: 20, safetyHawk: -20 } },
+    { name: 'Ainye Long',             party: '', desc: 'Public School Teacher', viable: false, s: { progressive: 55, taxServices: 55, transit: 30, environment: 50, yimby: 20, safetyHawk: -10 } },
+    { name: 'Richard Barrera',        party: '', desc: 'State Superintendent Advisor', viable: false, s: { progressive: 50, taxServices: 50, transit: 30, environment: 50, yimby: 25, safetyHawk: -10 } },
+    { name: 'Wendy Castaneda Leal',   party: '', desc: 'School District Superintendent', viable: false, s: { progressive: 30, taxServices: 35, transit: 25, environment: 35, yimby: 20, safetyHawk: 0 } },
+    { name: 'Nichelle M. Henderson',  party: '', desc: 'College Trustee/Teacher', viable: false, s: { progressive: 40, taxServices: 40, transit: 30, environment: 40, yimby: 20, safetyHawk: 0 } },
+    { name: 'Gus Mattammal',          party: '', desc: 'Educator/Executive/Author', viable: false, s: { progressive: -10, taxServices: -10, transit: 0, environment: 0, yimby: 20, safetyHawk: 20 } },
+    { name: 'Sonja Shaw',             party: '', desc: 'School District President', s: { progressive: -55, taxServices: -40, transit: -20, environment: -30, yimby: 0, safetyHawk: 40 } },
+  ],
+
+  // -------- COUNTY SUPERVISOR D2 (Petaluma area) --------
+  // I have limited detailed positions; I'll note this and provide tentative placements based on
+  // public information. Voters should read candidate statements.
+  sup2: [
+    { name: 'Joanna Paun',    party: '', desc: 'Petaluma JT. Union HS School District Trustee, Area 5', s: { progressive: 40, taxServices: 40, transit: 50, environment: 60, yimby: 30, safetyHawk: 0 } },
+    { name: 'Sylvia Lemus',   party: '', desc: 'Councilmember/Businesswoman', s: { progressive: 40, taxServices: 35, transit: 40, environment: 50, yimby: 30, safetyHawk: 0 } },
+    { name: 'Shelina Moreda', party: '', desc: 'Professional Athlete/Farmer', s: { progressive: 15, taxServices: 10, transit: 20, environment: 50, yimby: 10, safetyHawk: 10 } },
+    { name: 'John E. King',   party: '', desc: 'Operating Engineer/Farmer', s: { progressive: 5, taxServices: 0, transit: 10, environment: 30, yimby: 10, safetyHawk: 10 } },
+  ],
+
+  // -------- COUNTY SUPERVISOR D4 --------
+  sup4: [
+    { name: 'Melanie Bagby',     party: '', desc: 'Business Owner (former Cloverdale mayor)', s: { progressive: 45, taxServices: 45, transit: 50, environment: 60, yimby: 25, safetyHawk: 0 } },
+    { name: 'Tom Schwedhelm',    party: '', desc: 'Small Business Owner (former Santa Rosa police chief)', s: { progressive: 15, taxServices: 20, transit: 30, environment: 30, yimby: 20, safetyHawk: 50 } },
+    { name: 'Todd Lands',        party: '', desc: 'Councilman/Small Businessman (Healdsburg)', s: { progressive: 30, taxServices: 30, transit: 35, environment: 45, yimby: 25, safetyHawk: 10 } },
+  ],
+};
+
+// ==============================================================
+// CUSTOMIZE: UNCONTESTED constant
+// Seats with only one candidate filed — display with "(uncontested)"
+// and skip matching logic entirely.
+// ==============================================================
+const UNCONTESTED = {
+  judge10:    { name: 'David Kim',          desc: 'Superior Court Commissioner — only candidate' },
+  csupt:      { name: 'Amie Carter',        desc: 'County Superintendent of Schools (incumbent) — only candidate' },
+  acttc:      { name: 'Amanda Ruch',        desc: 'Assistant Auditor-Controller — only candidate' },
+  clerk:      { name: 'Deva Marie Proto',   desc: 'County Clerk-Recorder-Assessor (incumbent) — only candidate' },
+};
+
+// ==============================================================
+// CUSTOMIZE: MEASURES array
+// Ballot measures (state propositions and local measures).
+// For each measure, if there's a quiz question that maps directly
+// to a yes/no on this measure, set directQuestion to that exact
+// question text — the user's answer there will drive the recommendation.
+//
+// directQuestion: '' or null disables direct mapping (uses aggregate score)
+// yesProfile / noProfile: synthetic candidate-style profiles used when
+//   the user skipped the directQuestion (or when none was set)
+// ==============================================================
+const MEASURES = [
+  {
+    id: 'measureB',
+    title: 'Measure B — SMART Train Sales Tax Extension',
+    summary: 'Extends the existing ¼-cent SMART sales tax (currently set to expire in 2029) for another 30 years. Funds Sonoma-Marin Area Rail Transit train and bicycle/pedestrian pathway operations and expansion. ~$51M/year. Simple majority required.',
+    directQuestion: 'The SMART train should be expanded and continued.',
+    directNote: 'Measure B is the funding mechanism for SMART — your answer here directly drives this recommendation.',
+    yesProfile: { transit: 80, environment: 60, taxServices: 40, progressive: 0, yimby: 0, safetyHawk: 0 },
+    noProfile:  { transit: -80, environment: -60, taxServices: -40, progressive: 0, yimby: 0, safetyHawk: 0 },
+    caseFor:    'SMART connects North Bay communities, reduces 101 traffic, and supports climate goals. The tax already exists — this extends it.',
+    caseAgainst: 'Ridership has been below early projections; some argue funds would do more for buses or roads. This locks in the tax for 30 years.'
+  }
+];
+
+// ==============================================================
+// CUSTOMIZE: RACE_GROUPS array
+// Ordered list of race sections to display in the results page.
+// Each group has a section title and a list of races. Each race
+// references a slate in CANDIDATES (or UNCONTESTED), specifies how
+// many top matches to show (n), and provides a meta string.
+//
+// Use slate keys that match the keys in CANDIDATES. Use 'uncontested:KEY'
+// to reference UNCONTESTED entries.
+//
+// The {area.cd} / {area.ad} / {area.sup} placeholders in titles
+// are replaced with the actual district numbers from AREA.
+// ==============================================================
+const RACE_GROUPS = [
+  {
+    sectionKicker: 'Section I',
+    sectionTitle: 'Federal',
+    races: [
+      { title: 'U.S. House of Representatives, {area.cd}{area.cdOrd} District', slate: 'cd{area.cd}', n: 1,
+        meta: 'Top-two primary — the top two finishers, regardless of party, advance to November.' },
+    ]
+  },
+  {
+    sectionKicker: 'Section II',
+    sectionTitle: 'Statewide Offices',
+    races: [
+      { title: 'Governor', slate: 'governor', n: 3, meta: 'Top-two primary. Crowded field — top picks shown.' },
+      { title: 'Lieutenant Governor', slate: 'ltgov', n: 2, meta: 'Top-two primary.' },
+      { title: 'Secretary of State', slate: 'sos', n: 1, meta: 'Top-two primary.' },
+      { title: 'Controller', slate: 'controller', n: 1, meta: 'Top-two primary.' },
+      { title: 'Treasurer', slate: 'treasurer', n: 2, meta: 'Top-two primary. Open seat (Ma is running for Lt. Gov.).' },
+      { title: 'Attorney General', slate: 'ag', n: 1, meta: 'Top-two primary.' },
+      { title: 'Insurance Commissioner', slate: 'insurance', n: 2, meta: 'Top-two primary. Open seat — large field.' },
+      { title: 'Member, State Board of Equalization, 2nd District', slate: 'boe2', n: 2, meta: 'Top-two primary.' },
+      { title: 'State Senator, 2nd District', slate: 'ss2', n: 1, meta: 'Top-two primary.' },
+      { title: 'Member of the State Assembly, {area.ad}{area.adOrd} District', slate: 'ad{area.ad}', n: 2,
+        meta: 'Open seat — competitive field of mostly Democrats.' },
+    ]
+  },
+  {
+    sectionKicker: 'Section III',
+    sectionTitle: 'Nonpartisan State',
+    races: [
+      { title: 'Superintendent of Public Instruction', slate: 'suptpi', n: 3, meta: 'Open seat — Tony Thurmond is running for Governor.' },
+      { title: 'Judge of the Superior Court, Office #10', slate: 'uncontested:judge10' },
+      { title: 'County Superintendent of Schools', slate: 'uncontested:csupt' },
+    ]
+  },
+  {
+    sectionKicker: 'Section IV',
+    sectionTitle: 'County',
+    races: [
+      { title: 'County Supervisor, {area.sup}{area.supOrd} District', slate: 'sup{area.sup}', n: 2,
+        meta: 'Nonpartisan. Note: public data is limited for these local races — please read each candidate\'s statement.' },
+      { title: 'Auditor-Controller-Treasurer-Tax Collector', slate: 'uncontested:acttc' },
+      { title: 'County Clerk-Recorder-Assessor', slate: 'uncontested:clerk' },
+    ]
+  },
+];
+
+//==============================================================
+// HELPERS
+//==============================================================
+
+// Convert a number to ordinal suffix: 1→st, 2→nd, 11→th, 12→th, 21→st, etc.
+function ord(n) {
+  if (n >= 11 && n <= 13) return 'th';
+  switch (n % 10) {
+    case 1: return 'st';
+    case 2: return 'nd';
+    case 3: return 'rd';
+    default: return 'th';
+  }
+}
+
+// Expand {area.X} placeholders in titles/slate keys.
+// Supports: {area.cd}, {area.cdOrd}, {area.ad}, {area.adOrd}, {area.sup}, {area.supOrd}, {area.label}, {area.id}
+function expand(template, area) {
+  if (!template) return template;
+  return template.replace(/\{area\.(\w+)\}/g, (m, key) => {
+    if (key === 'cdOrd') return ord(area.cd);
+    if (key === 'adOrd') return ord(area.ad);
+    if (key === 'supOrd') return ord(area.sup);
+    return area[key] !== undefined ? area[key] : m;
+  });
+}
+
+//==============================================================
+// STATE
+//==============================================================
+const state = {
+  screen: 'welcome',
+  area: AREA,  // hardcoded — Petaluma only
+  qIndex: 0,
+  answers: [],
+  scores: { progressive: 0, taxServices: 0, transit: 0, environment: 0, yimby: 0, safetyHawk: 0 }
+};
+
+const app = document.getElementById('app');
+
+//==============================================================
+// RENDER
+//==============================================================
+function render() {
+  app.innerHTML = '';
+  if (state.screen === 'welcome')   renderWelcome();
+  else if (state.screen === 'quiz') renderQuiz();
+  else if (state.screen === 'results') renderResults();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function renderWelcome() {
+  app.innerHTML = `
+    <div class="masthead">
+      <div class="kicker">${escapeHtml(AREA.label)} Voter Quiz</div>
+      <div class="date">${escapeHtml(ELECTION_DATE_LONG)}</div>
+    </div>
+    <div class="welcome">
+      <h1>How will <em>${escapeHtml(AREA.label)}</em><br>vote?</h1>
+      <p class="lede">${QUESTIONS.length} quick questions on specific policy issues. We'll match your answers to the candidates and ballot measures on ${escapeHtml(AREA.label)}'s ballot.</p>
+      <div class="meta">~${Math.max(2, Math.round(QUESTIONS.length / 8))} minutes &nbsp;·&nbsp; <strong>${QUESTIONS.length} questions</strong> &nbsp;·&nbsp; Anonymous</div>
+      <button class="btn btn-large" onclick="startQuiz()">Begin →</button>
+      <div class="ornament">❦ ❦ ❦</div>
+      <p style="font-size: 13px; color: var(--ink-soft); max-width: 480px; margin: 0 auto; line-height: 1.5;">
+        Recommendations are matches based on your answers and publicly available information about each candidate. They're a starting point, not a substitute for reading candidate statements in your official voter guide. <em>Built for ${escapeHtml(AREA.label)} voters (${escapeHtml(AREA.meta)}). Voters in other areas can take it but should verify their actual ballot.</em>
+      </p>
+    </div>
+  `;
+}
+
+function renderQuiz() {
+  const q = QUESTIONS[state.qIndex];
+  const total = QUESTIONS.length;
+  const pct = Math.round((state.qIndex / total) * 100);
+
+  let answersHtml;
+  if (q.type === 'choice') {
+    answersHtml = `
+      <div class="answer-grid single">
+        ${q.options.map((opt, i) => `
+          <button class="answer-btn choice" onclick="answer(${i})">${opt.label}</button>
+        `).join('')}
+      </div>
+    `;
+  } else {
+    answersHtml = `
+      <div class="answer-grid">
+        <button class="answer-btn yes" onclick="answer('yes')">Yes</button>
+        <button class="answer-btn no" onclick="answer('no')">No</button>
+      </div>
+    `;
+  }
+
+  app.innerHTML = `
+    <div class="masthead">
+      <div class="kicker">${escapeHtml(AREA.label)} Voter Quiz</div>
+      <div class="date">${escapeHtml(ELECTION_LABEL)}</div>
+    </div>
+    <div class="quiz-header">
+      <span>${state.qIndex + 1} / ${total}</span>
+      <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+      <span>${pct}%</span>
+    </div>
+    <div class="quiz-card">
+      <div class="quiz-category">${q.c}</div>
+      <div class="quiz-question">${q.q}</div>
+      ${answersHtml}
+      <div class="quiz-nav">
+        ${state.qIndex > 0
+          ? '<button class="skip-link" onclick="goBack()">← Previous</button>'
+          : '<span></span>'}
+        <button class="skip-link" onclick="answer('skip')">Skip →</button>
+      </div>
+    </div>
+  `;
+}
+
+//==============================================================
+// QUIZ LOGIC
+//==============================================================
+function startQuiz() {
+  state.area = AREA;
+  state.screen = 'quiz';
+  state.qIndex = 0;
+  state.answers = [];
+  state.scores = { progressive: 0, taxServices: 0, transit: 0, environment: 0, yimby: 0, safetyHawk: 0 };
+  render();
+}
+
+function answer(value) {
+  const q = QUESTIONS[state.qIndex];
+  if (value === 'skip') {
+    state.answers.push({ q: state.qIndex, value: null });
+  } else if (q.type === 'choice') {
+    const opt = q.options[value];
+    applyDelta(opt.d, 1);
+    state.answers.push({ q: state.qIndex, value });
+  } else {
+    const sign = (value === 'yes') ? 1 : -1;
+    applyDelta(q.d, sign);
+    state.answers.push({ q: state.qIndex, value });
+  }
+  state.qIndex++;
+  if (state.qIndex >= QUESTIONS.length) {
+    state.screen = 'results';
+  }
+  render();
+}
+
+function goBack() {
+  if (state.qIndex === 0) return;
+  // undo last answer's score impact
+  const last = state.answers[state.answers.length - 1];
+  if (last && last.value !== null) {
+    const q = QUESTIONS[last.q];
+    if (q.type === 'choice') {
+      applyDelta(q.options[last.value].d, -1);
+    } else {
+      const sign = (last.value === 'yes') ? -1 : 1; // reverse
+      applyDelta(q.d, sign);
+    }
+  }
+  state.answers.pop();
+  state.qIndex--;
+  render();
+}
+
+function applyDelta(d, sign) {
+  if (!d) return;
+  Object.keys(d).forEach(k => {
+    state.scores[k] = (state.scores[k] || 0) + (d[k] * sign);
+  });
+}
+
+//==============================================================
+// MATCHING
+//==============================================================
+// Pre-compute the maximum possible absolute user score per axis,
+// based on the current QUESTIONS array. Used to normalize user
+// scores against the candidate score scale (~-100 to +100).
+const USER_AXIS_MAX = (function() {
+  const axes = ['progressive', 'taxServices', 'transit', 'environment', 'yimby', 'safetyHawk'];
+  const max = {};
+  axes.forEach(axis => {
+    let total = 0;
+    QUESTIONS.forEach(q => {
+      if (q.type === 'choice') {
+        total += Math.max(...q.options.map(o => Math.abs((o.d && o.d[axis]) || 0)));
+      } else {
+        total += Math.abs((q.d && q.d[axis]) || 0);
+      }
+    });
+    max[axis] = Math.max(1, total);  // avoid divide-by-zero
+  });
+  return max;
+})();
+
+function distance(userScores, cand) {
+  // Normalize both sides to a comparable [-1, +1] scale so the
+  // matching isn't biased toward moderate candidates just because
+  // the question pool produces lower-magnitude user scores.
+  const weights = { progressive: 1.5, taxServices: 0.8, environment: 0.9, yimby: 0.7, transit: 0.6, safetyHawk: 0.8 };
+  let total = 0, count = 0;
+  Object.keys(weights).forEach(k => {
+    const userN = (userScores[k] || 0) / USER_AXIS_MAX[k];   // ~-1 to +1
+    const candN = (cand.s[k] || 0) / 100;                    // ~-1 to +1
+    const diff = userN - candN;
+    total += weights[k] * diff * diff;
+    count += weights[k];
+  });
+  return Math.sqrt(total / count);
+}
+
+function rank(slate) {
+  // Filter to viable candidates by default. If every candidate in the
+  // slate is non-viable (shouldn't happen), fall back to the full slate.
+  const viable = slate.filter(c => c.viable !== false);
+  const working = viable.length > 0 ? viable : slate;
+  const scored = working.map(c => ({ c, d: distance(state.scores, c) }));
+  scored.sort((a, b) => a.d - b.d);
+  return scored;
+}
+
+function pickFor(slateKey) {
+  const slate = CANDIDATES[slateKey];
+  if (!slate || !slate.length) return null;
+  return rank(slate);
+}
+
+//==============================================================
+// REASONS — extract which user answers drove each match
+//==============================================================
+// For each answered question, compute the dot product of its
+// signed deltas with the candidate's score vector. High positive =
+// strong agreement on the axes the candidate cares about.
+
+function answerAlignment(answer, candProfile) {
+  if (!answer || answer.value === null) return 0;
+  const q = QUESTIONS[answer.q];
+  let deltas = {};
+  if (q.type === 'choice') {
+    deltas = (q.options[answer.value] && q.options[answer.value].d) || {};
+  } else {
+    const sign = (answer.value === 'yes') ? 1 : -1;
+    Object.keys(q.d || {}).forEach(k => { deltas[k] = q.d[k] * sign; });
+  }
+  let score = 0;
+  Object.keys(deltas).forEach(k => {
+    score += (deltas[k] || 0) * (candProfile.s[k] || 0);
+  });
+  return score;
+}
+
+function topReasonsFor(candProfile, n = 3) {
+  const scored = state.answers
+    .filter(a => {
+      // Exclude anchor questions (e.g., "How would you describe yourself politically?")
+      // from the reasons display — they score, but they're not "reasons."
+      const q = QUESTIONS[a.q];
+      return !(q && q.anchor);
+    })
+    .map(a => ({ answer: a, score: answerAlignment(a, candProfile) }))
+    .filter(x => x.score > 0);
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, n).map(x => x.answer);
+}
+
+function reasonHtml(answer, note) {
+  const q = QUESTIONS[answer.q];
+  const noteHtml = note ? `<span class="reason-sub">${escapeHtml(note)}</span>` : '';
+  if (q.type === 'choice') {
+    const opt = q.options[answer.value];
+    return `
+      <div class="reason">
+        <span class="reason-badge choice">You chose</span>
+        <span class="reason-text">${escapeHtml(opt.label)}<span class="reason-sub">${escapeHtml(q.q)}</span></span>
+      </div>
+    `;
+  } else {
+    const yes = answer.value === 'yes';
+    return `
+      <div class="reason">
+        <span class="reason-badge ${yes ? 'yes' : 'no'}">${yes ? 'Yes' : 'No'}</span>
+        <span class="reason-text">${escapeHtml(q.q)}${noteHtml}</span>
+      </div>
+    `;
+  }
+}
+
+function reasonsBlock(candProfile, n = 3, label = 'Why this match') {
+  const reasons = topReasonsFor(candProfile, n);
+  if (!reasons.length) {
+    return `<div class="reasons"><div class="reasons-label">${label}</div><div class="reasons-empty">No clear signal — most relevant questions were skipped.</div></div>`;
+  }
+  return `
+    <div class="reasons">
+      <div class="reasons-label">${label}</div>
+      ${reasons.map(reasonHtml).join('')}
+    </div>
+  `;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[c]));
+}
+
+// Find the user's direct answer to a specific question by its text.
+// Returns 'yes', 'no', a choice index, or null if skipped/not found.
+function getDirectAnswer(questionText) {
+  const idx = QUESTIONS.findIndex(q => q.q === questionText);
+  if (idx < 0) return { idx: -1, value: null };
+  const ans = state.answers.find(a => a.q === idx);
+  return { idx, value: ans && ans.value !== null ? ans.value : null };
+}
+
+// Plaintext version for download
+function reasonText(answer) {
+  const q = QUESTIONS[answer.q];
+  if (q.type === 'choice') {
+    return `  • You chose "${q.options[answer.value].label}" — ${q.q}`;
+  } else {
+    const yes = answer.value === 'yes';
+    return `  • ${yes ? 'Yes' : 'No '} — ${q.q}`;
+  }
+}
+
+//==============================================================
+// PROFILE BLURB
+//==============================================================
+function profileBlurb() {
+  const s = state.scores;
+  const p = s.progressive;
+  const env = s.environment;
+  const yim = s.yimby;
+  const haw = s.safetyHawk;
+  const tax = s.taxServices;
+
+  let lean;
+  if (p >= 60) lean = 'strongly progressive';
+  else if (p >= 25) lean = 'progressive-leaning';
+  else if (p >= 5) lean = 'moderate liberal';
+  else if (p >= -10) lean = 'centrist';
+  else if (p >= -30) lean = 'moderate conservative';
+  else lean = 'conservative-leaning';
+
+  const traits = [];
+  if (env >= 25) traits.push('environmentally focused');
+  else if (env <= -10) traits.push('skeptical of environmental regulation');
+  if (yim >= 25) traits.push('pro-housing');
+  else if (yim <= -10) traits.push('protective of existing neighborhoods');
+  if (haw >= 20) traits.push('strong on policing');
+  else if (haw <= -15) traits.push('reform-minded on public safety');
+  if (tax >= 25) traits.push('supportive of public investment');
+  else if (tax <= -15) traits.push('fiscally cautious');
+
+  const traitStr = traits.length
+    ? ' — and ' + traits.join(', ')
+    : '';
+  return `Your answers suggest you're <strong>${lean}</strong>${traitStr}.`;
+}
+
+//==============================================================
+// RESULTS
+//==============================================================
+function renderResults() {
+  const area = state.area;
+
+  // Render race groups from RACE_GROUPS config
+  const groupsHtml = RACE_GROUPS.map(group => {
+    const racesHtml = group.races.map(race => {
+      const title = expand(race.title, area);
+      const slateRef = expand(race.slate, area);
+      // Uncontested seats use 'uncontested:KEY' references
+      if (slateRef.startsWith('uncontested:')) {
+        const key = slateRef.split(':')[1];
+        return renderUncontested(title, UNCONTESTED[key]);
+      }
+      // Otherwise look up the candidate slate
+      const ranked = pickFor(slateRef);
+      if (!ranked) {
+        return `<div class="race"><div class="race-title">${escapeHtml(title)}</div><div class="race-meta">No candidates configured for this race.</div></div>`;
+      }
+      return renderRace(title, race.meta || '', ranked, race.n || 1);
+    }).join('');
+    return `
+      <div class="section-header">
+        <div class="section-kicker">${escapeHtml(group.sectionKicker)}</div>
+        <h2>${escapeHtml(group.sectionTitle)}</h2>
+      </div>
+      ${racesHtml}
+    `;
+  }).join('');
+
+  // Render measures (each may have direct-question mapping)
+  const measuresHtml = MEASURES.length === 0 ? '' : `
+    <div class="section-header">
+      <div class="section-kicker">Section ${romanNumeral(RACE_GROUPS.length + 1)}</div>
+      <h2>Ballot Measure${MEASURES.length > 1 ? 's' : ''}</h2>
+    </div>
+    ${MEASURES.map(renderMeasure).join('')}
+  `;
+
+  let html = `
+    <div class="masthead">
+      <div class="kicker">Your Voter Quiz Results</div>
+      <div class="date">${escapeHtml(area.label)} · ${ELECTION_LABEL}</div>
+    </div>
+
+    <div class="results-screen">
+      <h1>Your <em>ballot</em>,<br>at a glance.</h1>
+      <p class="results-summary">Below are matches for each contest on your ballot, based on the answers you gave. Use them as a starting point — then check your Voter Information Guide for candidate statements before you vote.</p>
+
+      <div class="profile-card">
+        <h3>Your Profile</h3>
+        <div class="profile-text">${profileBlurb()}</div>
+      </div>
+
+      ${groupsHtml}
+      ${measuresHtml}
+
+      <div class="disclaimer">
+        ${DISCLAIMER_HTML}
+      </div>
+
+      <div class="footer-actions">
+        <button class="btn" onclick="restart()">Take it again</button>
+        <button class="btn-ghost" onclick="copyLink()">Share this quiz</button>
+        <button class="btn-ghost" onclick="downloadResults()">Download results</button>
+      </div>
+    </div>
+  `;
+
+  app.innerHTML = html;
+}
+
+// Render a single ballot measure card.
+// If the measure has a directQuestion that the user answered, that answer
+// drives the recommendation. Otherwise, fall back to dot-product against
+// the yes/no profile.
+function renderMeasure(m) {
+  const direct = m.directQuestion ? getDirectAnswer(m.directQuestion) : { idx: -1, value: null };
+  let measureYes, isDirect;
+  if (direct.value !== null) {
+    measureYes = (direct.value === 'yes');
+    isDirect = true;
+  } else {
+    let dot = 0;
+    Object.keys(m.yesProfile || {}).forEach(k => {
+      dot += (state.scores[k] || 0) * m.yesProfile[k];
+    });
+    measureYes = dot > 0;
+    isDirect = false;
+  }
+
+  const label = measureYes ? 'Why YES, based on your answers' : 'Why NO, based on your answers';
+  const items = [];
+  if (isDirect) {
+    items.push(reasonHtml(
+      { q: direct.idx, value: direct.value },
+      m.directNote || 'Your direct answer to this question maps to this measure.'
+    ));
+  }
+  const profile = { s: measureYes ? m.yesProfile : m.noProfile };
+  const supporting = topReasonsFor(profile, 5).filter(a => a.q !== direct.idx).slice(0, 2);
+  supporting.forEach(a => items.push(reasonHtml(a)));
+  const reasonsBlock = items.length
+    ? `<div class="reasons"><div class="reasons-label">${label}</div>${items.join('')}</div>`
+    : `<div class="reasons"><div class="reasons-label">${label}</div><div class="reasons-empty">No clear signal — most relevant questions were skipped.</div></div>`;
+
+  return `
+    <div class="measure-card">
+      <div class="measure-title">${escapeHtml(m.title)}</div>
+      <div class="measure-summary">${escapeHtml(m.summary)}</div>
+      <div class="measure-vote ${measureYes ? 'yes' : 'no'}">${measureYes ? 'YES' : 'NO'}</div>
+      ${reasonsBlock}
+      <div class="alternates" style="margin-top: 14px;">
+        <strong>The case for YES:</strong> ${escapeHtml(m.caseFor)}<br>
+        <strong>The case for NO:</strong> ${escapeHtml(m.caseAgainst)}
+      </div>
+    </div>
+  `;
+}
+
+function romanNumeral(n) {
+  const map = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+  return map[n] || String(n);
+}
+
+function renderRace(title, meta, ranked, n = 1) {
+  if (!ranked || !ranked.length) return '';
+  const top = ranked.slice(0, Math.min(n, ranked.length));
+  const rest = ranked.slice(Math.min(n, ranked.length));
+
+  const topHtml = top.map((entry, i) => {
+    const c = entry.c;
+    const reasons = (i === 0) ? reasonsBlock(c, 3) : '';
+    return `
+      <div class="pick">
+        <div class="pick-label">${n > 1 ? `Match ${i+1}` : 'Top match'}</div>
+        <div class="pick-name">${c.name}${c.party ? `<span class="party">(${partyLabel(c.party)})</span>` : ''}</div>
+        ${c.desc ? `<div class="pick-rationale">${c.desc}</div>` : ''}
+        ${reasons}
+      </div>
+    `;
+  }).join('');
+
+  const restHtml = rest.length ? `
+    <div class="alternates">
+      <strong>Other candidates:</strong>
+      ${rest.map(r => `${r.c.name}${r.c.party ? ` (${partyLabel(r.c.party)})` : ''}`).join(' · ')}
+    </div>
+  ` : '';
+
+  return `
+    <div class="race">
+      <div class="race-title">${title}</div>
+      <div class="race-meta">${meta}</div>
+      ${topHtml}
+      ${restHtml}
+    </div>
+  `;
+}
+
+function renderUncontested(title, info) {
+  return `
+    <div class="race">
+      <div class="race-title">${title}</div>
+      <div class="race-meta">Uncontested</div>
+      <div class="pick">
+        <div class="pick-label">Only Candidate</div>
+        <div class="pick-name">${info.name}</div>
+        <div class="pick-rationale">${info.desc}</div>
+      </div>
+    </div>
+  `;
+}
+
+function partyLabel(p) {
+  return ({
+    'D': 'Democratic',
+    'R': 'Republican',
+    'G': 'Green',
+    'P&F': 'Peace & Freedom',
+    'L': 'Libertarian',
+    'AI': 'American Indep.',
+    'NPP': 'No Party Preference'
+  })[p] || p;
+}
+
+function restart() {
+  state.screen = 'welcome';
+  state.qIndex = 0;
+  state.answers = [];
+  state.scores = { progressive: 0, taxServices: 0, transit: 0, environment: 0, yimby: 0, safetyHawk: 0 };
+  render();
+}
+
+function copyLink() {
+  // Copy current page URL (this is a static file, so it'll be the file path / URL)
+  const url = window.location.href;
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(url).then(() => {
+      alert('Quiz link copied to clipboard.');
+    }).catch(() => {
+      prompt('Copy this link:', url);
+    });
+  } else {
+    prompt('Copy this link:', url);
+  }
+}
+
+function downloadResults() {
+  const text = buildResultsText();
+  try {
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'sonoma-voter-quiz-results.txt';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 100);
+  } catch (e) {
+    // Fallback for sandboxed environments — copy to clipboard
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(() => {
+        alert('Download blocked by browser. Results copied to clipboard instead.');
+      }).catch(() => {
+        prompt('Copy your results:', text);
+      });
+    } else {
+      prompt('Copy your results:', text);
+    }
+  }
+}
+
+function buildResultsText() {
+  const area = state.area;
+
+  function topPick(slateKey) {
+    const slate = CANDIDATES[slateKey];
+    if (!slate || !slate.length) return null;
+    return rank(slate)[0].c;
+  }
+
+  // Format candidate name with party affiliation (only for partisan races —
+  // nonpartisan candidates have no party field).
+  function nameP(c) {
+    return c.name + (c.party ? ' (' + partyLabel(c.party) + ')' : '');
+  }
+
+  const lines = [];
+  lines.push((AREA.label + ' — ' + ELECTION_LABEL).toUpperCase());
+  lines.push('Recommended votes based on your quiz answers');
+  lines.push('');
+
+  // Iterate RACE_GROUPS in order, producing one section per group
+  RACE_GROUPS.forEach(group => {
+    lines.push(group.sectionTitle + ':');
+    group.races.forEach(race => {
+      const title = expand(race.title, area);
+      const slateRef = expand(race.slate, area);
+      if (slateRef.startsWith('uncontested:')) {
+        const key = slateRef.split(':')[1];
+        const u = UNCONTESTED[key];
+        if (u) lines.push(title + ': ' + u.name + ' (uncontested)');
+      } else {
+        const top = topPick(slateRef);
+        if (top) lines.push(title + ': ' + nameP(top));
+      }
+    });
+    lines.push('');
+  });
+
+  // Iterate MEASURES, applying direct-question logic for each
+  if (MEASURES.length > 0) {
+    lines.push(MEASURES.length > 1 ? 'Ballot Measures:' : 'Ballot Measure:');
+    MEASURES.forEach(m => {
+      const direct = m.directQuestion ? getDirectAnswer(m.directQuestion) : { idx: -1, value: null };
+      let measureYes;
+      if (direct.value !== null) {
+        measureYes = (direct.value === 'yes');
+      } else {
+        let dot = 0;
+        Object.keys(m.yesProfile || {}).forEach(k => {
+          dot += (state.scores[k] || 0) * m.yesProfile[k];
+        });
+        measureYes = dot > 0;
+      }
+      lines.push(m.title + ': ' + (measureYes ? 'YES' : 'NO'));
+    });
+    lines.push('');
+  }
+
+  lines.push('---');
+  lines.push('Verify on your official ballot:');
+  lines.push(VERIFY_URL);
+
+  return lines.join('\n');
+}
+
+// kick off
+render();
+</script>
+</body>
+</html>
